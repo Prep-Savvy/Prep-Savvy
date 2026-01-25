@@ -199,22 +199,15 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         </div>
 
         {/* Hero Banner */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-8 mb-8 text-white relative overflow-hidden">
-          <div className="relative z-10">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 md:p-8 mb-8 text-white">
+          <div className="max-w-full">
             <span className="inline-block px-3 py-1 bg-white/20 rounded-full text-sm font-medium mb-3">
               📅 {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </span>
-            <h2 className="text-3xl font-bold mb-2">Today's Practice Sets</h2>
-            <p className="text-blue-100 text-lg">
+            <h2 className="text-2xl md:text-3xl font-bold mb-2">Today's Practice Sets</h2>
+            <p className="text-blue-100 text-base md:text-lg">
               Complete all categories to maximize your preparation. Fresh questions await!
             </p>
-          </div>
-          <div className="absolute right-0 top-0 bottom-0 w-1/3 opacity-10">
-            <img 
-              src="https://images.unsplash.com/photo-1758413350815-7b06dbbfb9a7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBjbGFzc3Jvb20lMjBsZWFybmluZ3xlbnwxfHx8fDE3NjkwOTgwNDR8MA&ixlib=rb-4.1.0&q=80&w=1080"
-              alt=""
-              className="w-full h-full object-cover"
-            />
           </div>
         </div>
 
@@ -260,22 +253,41 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         </div>
 
         {/* Motivational Section */}
+
         <div className="mt-8 bg-white rounded-2xl p-6 border border-slate-200">
+
           <div className="flex items-center gap-6">
-            <img 
+
+            <img
+
               src="https://images.unsplash.com/photo-1758518731027-78a22c8852ec?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhY2hpZXZlbWVudCUyMHN1Y2Nlc3MlMjBjZWxlYnJhdGlvbnxlbnwxfHx8fDE3NjkxMzcyMjB8MA&ixlib=rb-4.1.0&q=80&w=1080"
+
               alt="Success"
+
               className="w-32 h-32 rounded-xl object-cover"
+
             />
+
             <div>
+
               <h4 className="font-bold text-lg text-slate-900 mb-2">💪 Keep Practicing Daily!</h4>
+
               <p className="text-slate-600">
+
                 Consistency is key to success. Complete at least one practice set every day to see significant improvement in your placement preparation.
+
               </p>
+
             </div>
+
           </div>
+
         </div>
+
       </main>
+
     </div>
+
   );
+
 }
