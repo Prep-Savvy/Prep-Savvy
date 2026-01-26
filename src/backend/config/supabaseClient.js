@@ -1,0 +1,1 @@
+//Handles Supabase connection setup (URL, anon key)
