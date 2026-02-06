@@ -1,26 +1,93 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Clock, Flag } from 'lucide-react';
-import type { Question } from './StudentDashboard';
 
 interface TestInterfaceProps {
   category: string;
   onBack: () => void;
-  onSubmit: (score: number, total: number, questions: Question[], userAnswers: number[]) => void;
+  onSubmit: (score: number, total: number, questions: any[], userAnswers: number[]) => void;
+  user: { name: string; email: string };
 }
 
-export default function TestInterface({ category, onBack, onSubmit }: TestInterfaceProps) {
+// Hardcoded your 10 questions with 4 options each and correct_answer index
+const hardcodedQuestions = [
+  {
+    id: "q1",
+    category: "Java",
+    question: "Which keyword is used to create an object in Java?",
+    options: ["new", "object", "create", "instance"],
+    correctAnswer: 0, // new
+  },
+  {
+    id: "q2",
+    category: "Java",
+    question: "What will be the output of: int x = 5; System.out.print(x++ + ++x);",
+    options: ["10", "11", "12", "13"],
+    correctAnswer: 2, // 12
+  },
+  {
+    id: "q3",
+    category: "DSA",
+    question: "Which data structure is best suited for implementing recursion?",
+    options: ["Queue", "Stack", "Array", "Linked List"],
+    correctAnswer: 1, // Stack
+  },
+  {
+    id: "q4",
+    category: "OS",
+    question: "Deadlock occurs when:",
+    options: ["Processes wait for each other forever", "CPU is busy", "Memory is full", "Disk is full"],
+    correctAnswer: 0,
+  },
+  {
+    id: "q5",
+    category: "JavaScript",
+    question: "Which JavaScript method can be used to find the largest element in an array?",
+    options: ["Math.max(...arr)", "arr.max()", "Math.max(arr)", "arr.reduce()"],
+    correctAnswer: 0,
+  },
+  {
+    id: "q6",
+    category: "Algorithms",
+    question: "Which logic is best to check whether a number is prime?",
+    options: ["Check divisibility from 2 to n-1", "Check divisibility from 2 to sqrt(n)", "Check only even numbers", "Check only odd numbers"],
+    correctAnswer: 1,
+  },
+  {
+    id: "q7",
+    category: "C++",
+    question: "int x = 4; cout << (x << 1); What will be the output?",
+    options: ["4", "8", "2", "16"],
+    correctAnswer: 1,
+  },
+  {
+    id: "q8",
+    category: "Programming Basics",
+    question: "Which loop executes at least once even if the condition is false?",
+    options: ["for", "while", "do-while", "foreach"],
+    correctAnswer: 2,
+  },
+  {
+    id: "q9",
+    category: "Java",
+    question: "What is the output of: System.out.print(10 / 3);",
+    options: ["3", "3.333", "3.0", "Error"],
+    correctAnswer: 0,
+  },
+  {
+    id: "q10",
+    category: "DSA",
+    question: "What is the time complexity of binary search in a sorted array?",
+    options: ["O(n)", "O(log n)", "O(n log n)", "O(n²)"],
+    correctAnswer: 1,
+  }
+];
+
+export default function TestInterface({ category, onBack, onSubmit, user }: TestInterfaceProps) {
+  const [questions] = useState(hardcodedQuestions);
+  const [userAnswers, setUserAnswers] = useState<number[]>(new Array(questions.length).fill(-1));
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [userAnswers, setUserAnswers] = useState<number[]>([]);
-  const [timeLeft, setTimeLeft] = useState(1200); // 20 minutes in seconds
+  const [timeLeft, setTimeLeft] = useState(1200); // 20 minutes
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
-
-  // Mock questions based on category
-  const questions: Question[] = generateMockQuestions(category);
-
-  // Initialize answers array
-  useEffect(() => {
-    setUserAnswers(new Array(questions.length).fill(-1));
-  }, [questions.length]);
 
   // Timer
   useEffect(() => {
@@ -33,7 +100,6 @@ export default function TestInterface({ category, onBack, onSubmit }: TestInterf
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(timer);
   }, []);
 
@@ -61,10 +127,12 @@ export default function TestInterface({ category, onBack, onSubmit }: TestInterf
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    // Calculate score locally — correct based on clicked index vs correct_answer index
     const score = userAnswers.reduce((acc, answer, index) => {
       return answer === questions[index].correctAnswer ? acc + 1 : acc;
     }, 0);
+
     onSubmit(score, questions.length, questions, userAnswers);
   };
 
@@ -84,7 +152,6 @@ export default function TestInterface({ category, onBack, onSubmit }: TestInterf
               <ArrowLeft className="w-5 h-5" />
               <span className="font-medium">Back</span>
             </button>
-
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg">
                 <Clock className="w-5 h-5" />
@@ -126,22 +193,11 @@ export default function TestInterface({ category, onBack, onSubmit }: TestInterf
                 <p className="text-lg text-slate-900 leading-relaxed">{currentQuestion.question}</p>
               </div>
             </div>
-            {currentQuestion.difficulty && (
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
-                currentQuestion.difficulty === 'Easy' 
-                  ? 'bg-green-100 text-green-700' 
-                  : currentQuestion.difficulty === 'Medium'
-                  ? 'bg-orange-100 text-orange-700'
-                  : 'bg-red-100 text-red-700'
-              }`}>
-                {currentQuestion.difficulty}
-              </span>
-            )}
           </div>
 
           {/* Options */}
           <div className="space-y-3">
-            {currentQuestion.options.map((option, index) => (
+            {currentQuestion.options.map((option: string, index: number) => (
               <button
                 key={index}
                 onClick={() => handleAnswerSelect(index)}
@@ -185,7 +241,6 @@ export default function TestInterface({ category, onBack, onSubmit }: TestInterf
           >
             Previous
           </button>
-
           <div className="flex gap-3">
             {currentQuestionIndex === questions.length - 1 ? (
               <button
@@ -276,161 +331,4 @@ export default function TestInterface({ category, onBack, onSubmit }: TestInterf
       )}
     </div>
   );
-}
-
-// Helper function to generate mock questions
-function generateMockQuestions(category: string): Question[] {
-  const questionsByCategory: Record<string, Question[]> = {
-    aptitude: [
-      {
-        id: '1',
-        category: 'aptitude',
-        question: 'If a train travels 360 km in 4 hours, what is its average speed?',
-        options: ['80 km/h', '85 km/h', '90 km/h', '95 km/h'],
-        correctAnswer: 2,
-        difficulty: 'Easy'
-      },
-      {
-        id: '2',
-        category: 'aptitude',
-        question: 'What is 15% of 240?',
-        options: ['30', '32', '36', '40'],
-        correctAnswer: 2,
-        difficulty: 'Easy'
-      },
-      {
-        id: '3',
-        category: 'aptitude',
-        question: 'If the ratio of boys to girls in a class is 3:2 and there are 45 students, how many are girls?',
-        options: ['15', '18', '20', '27'],
-        correctAnswer: 1,
-        difficulty: 'Medium'
-      },
-      {
-        id: '4',
-        category: 'aptitude',
-        question: 'A shopkeeper sells an item at 20% profit. If the cost price is ₹500, what is the selling price?',
-        options: ['₹550', '₹600', '₹620', '₹650'],
-        correctAnswer: 1,
-        difficulty: 'Medium'
-      },
-      {
-        id: '5',
-        category: 'aptitude',
-        question: 'What is the compound interest on ₹10,000 at 10% per annum for 2 years?',
-        options: ['₹2,000', '₹2,100', '₹2,200', '₹2,500'],
-        correctAnswer: 1,
-        difficulty: 'Hard'
-      }
-    ],
-    logical: [
-      {
-        id: '1',
-        category: 'logical',
-        question: 'Complete the series: 2, 6, 12, 20, 30, ?',
-        options: ['40', '42', '44', '46'],
-        correctAnswer: 1,
-        difficulty: 'Medium'
-      },
-      {
-        id: '2',
-        category: 'logical',
-        question: 'If COMPUTER is coded as DPNQVUFS, how is LAPTOP coded?',
-        options: ['MBQUPQ', 'MBQURQ', 'MCQUPQ', 'MBQUPR'],
-        correctAnswer: 0,
-        difficulty: 'Hard'
-      },
-      {
-        id: '3',
-        category: 'logical',
-        question: 'Which number does not belong: 2, 3, 6, 7, 8, 14, 15, 30',
-        options: ['3', '6', '8', '30'],
-        correctAnswer: 2,
-        difficulty: 'Medium'
-      },
-      {
-        id: '4',
-        category: 'logical',
-        question: 'If all Bloops are Razzies and all Razzies are Lazzies, then all Bloops are definitely Lazzies.',
-        options: ['True', 'False', 'Cannot be determined', 'None of these'],
-        correctAnswer: 0,
-        difficulty: 'Easy'
-      }
-    ],
-    verbal: [
-      {
-        id: '1',
-        category: 'verbal',
-        question: 'Choose the synonym of "METICULOUS":',
-        options: ['Careless', 'Careful', 'Reckless', 'Hasty'],
-        correctAnswer: 1,
-        difficulty: 'Easy'
-      },
-      {
-        id: '2',
-        category: 'verbal',
-        question: 'Choose the antonym of "ABUNDANCE":',
-        options: ['Plenty', 'Scarcity', 'Wealth', 'Prosperity'],
-        correctAnswer: 1,
-        difficulty: 'Easy'
-      },
-      {
-        id: '3',
-        category: 'verbal',
-        question: 'Fill in the blank: She was _____ by the sudden noise.',
-        options: ['startled', 'starting', 'starts', 'startling'],
-        correctAnswer: 0,
-        difficulty: 'Medium'
-      },
-      {
-        id: '4',
-        category: 'verbal',
-        question: 'Which sentence is grammatically correct?',
-        options: [
-          'Neither of the students have completed the assignment.',
-          'Neither of the students has completed the assignment.',
-          'Neither of the student have completed the assignment.',
-          'Neither of the student has completed the assignment.'
-        ],
-        correctAnswer: 1,
-        difficulty: 'Hard'
-      }
-    ],
-    coding: [
-      {
-        id: '1',
-        category: 'coding',
-        question: 'What is the time complexity of binary search?',
-        options: ['O(n)', 'O(log n)', 'O(n log n)', 'O(n²)'],
-        correctAnswer: 1,
-        difficulty: 'Easy'
-      },
-      {
-        id: '2',
-        category: 'coding',
-        question: 'Which data structure uses LIFO (Last In First Out)?',
-        options: ['Queue', 'Stack', 'Tree', 'Graph'],
-        correctAnswer: 1,
-        difficulty: 'Easy'
-      },
-      {
-        id: '3',
-        category: 'coding',
-        question: 'What will be the output of: print(2 ** 3 ** 2)?',
-        options: ['64', '512', '256', '128'],
-        correctAnswer: 1,
-        difficulty: 'Hard'
-      },
-      {
-        id: '4',
-        category: 'coding',
-        question: 'Which sorting algorithm has the best average-case time complexity?',
-        options: ['Bubble Sort', 'Insertion Sort', 'Merge Sort', 'Selection Sort'],
-        correctAnswer: 2,
-        difficulty: 'Medium'
-      }
-    ]
-  };
-
-  return questionsByCategory[category] || questionsByCategory.aptitude;
 }

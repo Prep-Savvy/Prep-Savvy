@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { GraduationCap, Shield, Mail, User as UserIcon, UserPlus, CheckCircle } from 'lucide-react';
 import type { User, UserType } from '../App';
-import { supabase } from '../../backend/config/supabaseClient'; // ← adjust path when your friend adds the file
+import { supabase } from '../backend/config/supabaseClient'; // ← adjust path when your friend adds the file
 
 interface LoginPageProps {
   onLogin: (user: User) => void;

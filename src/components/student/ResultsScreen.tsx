@@ -1,4 +1,4 @@
-import { ArrowLeft, Trophy, TrendingUp, Sparkles } from 'lucide-react';
+import { ArrowLeft, Trophy, TrendingUp } from 'lucide-react';
 import type { Question } from './StudentDashboard';
 
 interface ResultsScreenProps {
@@ -20,11 +20,6 @@ export default function ResultsScreen({
 }: ResultsScreenProps) {
   const percentage = Math.round((score / total) * 100);
   const isPassed = percentage >= 60;
-
-  const handleExplainWithAI = (questionIndex: number) => {
-    // Mock AI explanation
-    alert(`AI Explanation for Question ${questionIndex + 1}:\n\n${getAIExplanation(questions[questionIndex], category)}`);
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-slate-50">
@@ -106,9 +101,11 @@ export default function ResultsScreen({
           <h3 className="font-bold text-lg text-slate-900 mb-6">Detailed Review</h3>
           <div className="space-y-6">
             {questions.map((question, index) => {
-              const userAnswer = userAnswers[index];
-              const isCorrect = userAnswer === question.correctAnswer;
-              
+              const userAnswerIndex = userAnswers[index];
+              const isCorrect = userAnswerIndex === question.correctAnswer;
+              const correctOption = question.options[question.correctAnswer];
+              const userOption = userAnswerIndex === -1 ? "Not answered" : question.options[userAnswerIndex];
+
               return (
                 <div
                   key={question.id}
@@ -127,7 +124,7 @@ export default function ResultsScreen({
                       
                       <div className="space-y-2 mb-4">
                         {question.options.map((option, optIndex) => {
-                          const isUserAnswer = userAnswer === optIndex;
+                          const isUserAnswer = userAnswerIndex === optIndex;
                           const isCorrectAnswer = question.correctAnswer === optIndex;
                           
                           return (
@@ -136,7 +133,7 @@ export default function ResultsScreen({
                               className={`p-3 rounded-lg border ${
                                 isCorrectAnswer
                                   ? 'border-green-600 bg-green-100'
-                                  : isUserAnswer
+                                  : isUserAnswer && !isCorrectAnswer
                                   ? 'border-red-600 bg-red-100'
                                   : 'border-slate-200 bg-white'
                               }`}
@@ -145,9 +142,9 @@ export default function ResultsScreen({
                                 {isCorrectAnswer && <span className="text-green-600 font-bold">✓</span>}
                                 {isUserAnswer && !isCorrectAnswer && <span className="text-red-600 font-bold">✗</span>}
                                 <span className={`${
-                                  isCorrectAnswer || isUserAnswer ? 'font-medium' : ''
+                                  isCorrectAnswer || (isUserAnswer && !isCorrectAnswer) ? 'font-medium' : ''
                                 } ${
-                                  isCorrectAnswer ? 'text-green-900' : isUserAnswer ? 'text-red-900' : 'text-slate-700'
+                                  isCorrectAnswer ? 'text-green-900' : (isUserAnswer && !isCorrectAnswer) ? 'text-red-900' : 'text-slate-700'
                                 }`}>
                                   {option}
                                 </span>
@@ -163,14 +160,10 @@ export default function ResultsScreen({
                         })}
                       </div>
 
-                      {!isCorrect && (
-                        <button
-                          onClick={() => handleExplainWithAI(index)}
-                          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg text-sm font-medium transition-all"
-                        >
-                          <Sparkles className="w-4 h-4" />
-                          AI Explain
-                        </button>
+                      {!isCorrect && userAnswerIndex !== -1 && (
+                        <p className="text-sm text-red-700 mt-2">
+                          Correct answer: <span className="font-medium">{correctOption}</span>
+                        </p>
                       )}
                     </div>
                   </div>
@@ -192,16 +185,4 @@ export default function ResultsScreen({
       </main>
     </div>
   );
-}
-
-// Helper function for AI explanations
-function getAIExplanation(question: Question, category: string): string {
-  const explanations: Record<string, string> = {
-    aptitude: `This is a ${category} problem. The correct answer is "${question.options[question.correctAnswer]}".\n\nStep-by-step solution:\n1. Identify the given values\n2. Apply the relevant formula\n3. Calculate the result\n\nTip: Practice similar problems to improve your speed and accuracy in ${category} questions.`,
-    logical: `This is a ${category} problem. The correct answer is "${question.options[question.correctAnswer]}".\n\nReasoning:\n1. Look for the pattern or relationship\n2. Apply logical deduction\n3. Verify your answer\n\nTip: Pattern recognition improves with practice. Try solving similar problems daily.`,
-    verbal: `This is a ${category} problem. The correct answer is "${question.options[question.correctAnswer]}".\n\nExplanation:\n1. Understand the context\n2. Consider grammar rules or word meanings\n3. Eliminate incorrect options\n\nTip: Reading regularly helps improve verbal ability significantly.`,
-    coding: `This is a ${category} problem. The correct answer is "${question.options[question.correctAnswer]}".\n\nConcept:\n1. Understand the data structure or algorithm\n2. Analyze time and space complexity\n3. Consider edge cases\n\nTip: Practice coding problems on platforms like LeetCode and HackerRank.`
-  };
-
-  return explanations[category] || 'This question requires careful analysis. Review the concept and try similar problems.';
 }

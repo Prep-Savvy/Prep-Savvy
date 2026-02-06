@@ -1,19 +1,58 @@
+import { useState, useEffect } from 'react';
+import { getAttemptsOverview } from '../../backend/admin/analyticsService';
+import { listQuestions } from '../../backend/admin/questionService';
+
 import { BookOpen, Users, Calendar, TrendingUp, Activity } from 'lucide-react';
 
-export default function AdminOverview() {
-  const stats = {
-    totalQuestions: 342,
-    activeStudents: 156,
-    testsToday: 89,
-    avgCompletion: 76
-  };
+// Hardcoded recent activity (since no backend for it yet)
+const recentActivity = [
+  { id: '1', action: 'New student registered', user: 'John Doe', time: '5 mins ago' },
+  { id: '2', action: 'Daily set published', user: 'Admin', time: '2 hours ago' },
+  { id: '3', action: '15 questions added', user: 'Admin', time: '3 hours ago' },
+  { id: '4', action: 'Test completed', user: 'Sarah Smith', time: '4 hours ago' },
+];
 
-  const recentActivity = [
-    { id: '1', action: 'New student registered', user: 'John Doe', time: '5 mins ago' },
-    { id: '2', action: 'Daily set published', user: 'Admin', time: '2 hours ago' },
-    { id: '3', action: '15 questions added', user: 'Admin', time: '3 hours ago' },
-    { id: '4', action: 'Test completed', user: 'Sarah Smith', time: '4 hours ago' }
-  ];
+export default function AdminOverview() {
+  const [stats, setStats] = useState({
+    totalQuestionsAttempted: 0,
+    averagePercentage: 0,
+    totalAttempts: 0,
+    topStudents: [] as any[], // temporary any; fix later with type
+  });
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const questionsData = await listQuestions(); // returns { questions, total, ... }
+        const overview = await getAttemptsOverview(); // returns { totalAttempts, averagePercentage, ... }
+
+        setStats({
+          totalQuestionsAttempted: overview.totalQuestionsAttempted || 0,
+          averagePercentage: overview.averagePercentage || 0,
+          totalAttempts: overview.totalAttempts || 0,
+          topStudents: overview.topStudents || [],
+        });
+      } catch (err) {
+        setError('Failed to load stats');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
+  // Display fallback during loading
+  const displayStats = loading
+    ? { totalQuestionsAttempted: '-', averagePercentage: '-', totalAttempts: '-', topStudents: [] }
+    : stats;
 
   return (
     <div className="p-8">
@@ -23,17 +62,17 @@ export default function AdminOverview() {
         <p className="text-slate-600">Welcome to the PrepSavvy Admin Control Center</p>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid - updated keys */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <div className="flex items-center justify-between mb-3">
             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
               <BookOpen className="w-6 h-6 text-blue-600" />
             </div>
-            <span className="text-3xl font-bold text-slate-900">{stats.totalQuestions}</span>
+            <span className="text-3xl font-bold text-slate-900">{displayStats.totalQuestionsAttempted}</span>
           </div>
-          <h3 className="font-semibold text-slate-900 mb-1">Total Questions</h3>
-          <p className="text-sm text-slate-600">In question bank</p>
+          <h3 className="font-semibold text-slate-900 mb-1">Questions Attempted</h3>
+          <p className="text-sm text-slate-600">Total across attempts</p>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
@@ -41,10 +80,10 @@ export default function AdminOverview() {
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
               <Users className="w-6 h-6 text-green-600" />
             </div>
-            <span className="text-3xl font-bold text-slate-900">{stats.activeStudents}</span>
+            <span className="text-3xl font-bold text-slate-900">{displayStats.totalAttempts}</span>
           </div>
-          <h3 className="font-semibold text-slate-900 mb-1">Active Students</h3>
-          <p className="text-sm text-slate-600">Currently enrolled</p>
+          <h3 className="font-semibold text-slate-900 mb-1">Total Attempts</h3>
+          <p className="text-sm text-slate-600">All student submissions</p>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
@@ -52,10 +91,10 @@ export default function AdminOverview() {
             <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
               <Calendar className="w-6 h-6 text-purple-600" />
             </div>
-            <span className="text-3xl font-bold text-slate-900">{stats.testsToday}</span>
+            <span className="text-3xl font-bold text-slate-900">{displayStats.averagePercentage}%</span>
           </div>
-          <h3 className="font-semibold text-slate-900 mb-1">Tests Today</h3>
-          <p className="text-sm text-slate-600">Completed attempts</p>
+          <h3 className="font-semibold text-slate-900 mb-1">Avg Percentage</h3>
+          <p className="text-sm text-slate-600">Overall performance</p>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
@@ -63,13 +102,17 @@ export default function AdminOverview() {
             <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
               <TrendingUp className="w-6 h-6 text-orange-600" />
             </div>
-            <span className="text-3xl font-bold text-slate-900">{stats.avgCompletion}%</span>
+            <span className="text-3xl font-bold text-slate-900">{displayStats.averagePercentage}%</span>
           </div>
-          <h3 className="font-semibold text-slate-900 mb-1">Avg Completion</h3>
-          <p className="text-sm text-slate-600">Test completion rate</p>
+          <h3 className="font-semibold text-slate-900 mb-1">Avg Score</h3>
+          <p className="text-sm text-slate-600">Percentage based</p>
         </div>
       </div>
 
+      {error && <p className="text-red-600 mb-4">{error}</p>}
+      {loading && <p className="text-slate-600 mb-4">Loading stats...</p>}
+
+      {/* Rest unchanged */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Recent Activity */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">

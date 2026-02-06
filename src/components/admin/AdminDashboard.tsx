@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   BookOpen, 
@@ -12,6 +12,7 @@ import AdminOverview from './AdminOverview';
 import QuestionBank from './QuestionBank';
 import DailySetManager from './DailySetManager';
 import StudentAnalytics from './StudentAnalytics';
+import { getDailySets } from '../../backend/admin/dailySetService'; // import real service
 
 interface AdminDashboardProps {
   user: User;
@@ -22,6 +23,8 @@ type AdminView = 'overview' | 'questions' | 'daily-sets' | 'analytics';
 
 export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const [currentView, setCurrentView] = useState<AdminView>('overview');
+  const [recentActivity, setRecentActivity] = useState<any[]>([]); // real data
+  const [loadingActivity, setLoadingActivity] = useState(true);
 
   const menuItems = [
     { id: 'overview' as AdminView, label: 'Overview', icon: LayoutDashboard },
@@ -29,6 +32,32 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     { id: 'daily-sets' as AdminView, label: 'Daily Sets', icon: Calendar },
     { id: 'analytics' as AdminView, label: 'Student Analytics', icon: Users }
   ];
+
+  // Fetch real recent activity (latest published daily sets as example)
+  useEffect(() => {
+    const fetchRecent = async () => {
+      try {
+        setLoadingActivity(true);
+        const { sets } = await getDailySets({ date: undefined, limit: 5 }); // latest 5 published sets
+        const activity = sets.map((set: any) => ({
+          id: set.id,
+          action: 'Daily set published',
+          user: 'Admin',
+          time: new Date(set.created_at).toLocaleString(),
+          category: set.category,
+        }));
+        setRecentActivity(activity);
+      } catch (err) {
+        console.error('Failed to load recent activity', err);
+        // fallback to empty
+        setRecentActivity([]);
+      } finally {
+        setLoadingActivity(false);
+      }
+    };
+
+    fetchRecent();
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -83,7 +112,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-medium transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            Logout
+            <span className="text-sm font-medium">Logout</span>
           </button>
         </div>
       </aside>

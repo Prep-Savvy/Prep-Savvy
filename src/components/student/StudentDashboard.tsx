@@ -1,5 +1,13 @@
-import { useState } from 'react';
-import { GraduationCap, LogOut, User as UserIcon, Trophy, BookOpen, Clock } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { fetchProgress } from '../../backend/student/progressService';
+import {
+  GraduationCap,
+  LogOut,
+  User as UserIcon,
+  Trophy,
+  BookOpen,
+  Clock
+} from 'lucide-react';
 import type { User } from '../../App';
 import TestInterface from './TestInterface';
 import ProfilePage from './ProfilePage';
@@ -31,9 +39,53 @@ export interface TestAttempt {
 export default function StudentDashboard({ user, onLogout }: StudentDashboardProps) {
   const [currentView, setCurrentView] = useState<'home' | 'test' | 'profile' | 'results'>('home');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [lastTestResult, setLastTestResult] = useState<{ score: number; total: number; questions: Question[]; userAnswers: number[] } | null>(null);
+  const [lastTestResult, setLastTestResult] = useState<{
+    score: number;
+    total: number;
+    questions: Question[];
+    userAnswers: number[];
+  } | null>(null);
 
-  // Mock data for daily practice sets
+  const [stats, setStats] = useState({
+    totalAttempts: 0,
+    averageScore: 0,
+    testsToday: 0
+  });
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadProgress = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const progress = await fetchProgress(user.email);
+
+        const attempts = progress.attempts ?? [];
+
+        const today = new Date().toDateString();
+        const testsToday = attempts.filter((a: any) =>
+          new Date(a.attempted_at).toDateString() === today
+        ).length;
+
+        setStats({
+          totalAttempts: progress.totalAttempts ?? 0,
+          averageScore: Math.round(progress.averageScore ?? 0),
+          testsToday
+        });
+      } catch (err) {
+        setError('Failed to load progress');
+        console.error('Failed to load student progress', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProgress();
+  }, [user.email]);
+
   const practiceCategories = [
     {
       id: 'aptitude',
@@ -69,19 +121,17 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     }
   ];
 
-  // Mock stats
-  const stats = {
-    totalAttempts: 24,
-    averageScore: 78,
-    testsToday: 2
-  };
-
   const handleStartTest = (categoryId: string) => {
     setSelectedCategory(categoryId);
     setCurrentView('test');
   };
 
-  const handleTestSubmit = (score: number, total: number, questions: Question[], userAnswers: number[]) => {
+  const handleTestSubmit = (
+    score: number,
+    total: number,
+    questions: Question[],
+    userAnswers: number[]
+  ) => {
     setLastTestResult({ score, total, questions, userAnswers });
     setCurrentView('results');
   };
@@ -97,6 +147,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         category={selectedCategory}
         onBack={handleBackToHome}
         onSubmit={handleTestSubmit}
+        user={user}  // ← this line added (fixes the error)
       />
     );
   }
@@ -136,7 +187,9 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
               </div>
               <div>
                 <h1 className="font-bold text-xl text-slate-900">PrepSavvy</h1>
-                <p className="text-xs text-slate-600">Welcome back, {user.name}!</p>
+                <p className="text-xs text-slate-600">
+                  Welcome back, {user.name}!
+                </p>
               </div>
             </div>
 
@@ -169,7 +222,9 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                 <BookOpen className="w-6 h-6 text-blue-600" />
               </div>
-              <span className="text-3xl font-bold text-slate-900">{stats.totalAttempts}</span>
+              <span className="text-3xl font-bold text-slate-900">
+                {loading ? '-' : stats.totalAttempts}
+              </span>
             </div>
             <h3 className="font-semibold text-slate-900">Total Attempts</h3>
             <p className="text-sm text-slate-600">All-time practice tests</p>
@@ -180,7 +235,9 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                 <Trophy className="w-6 h-6 text-green-600" />
               </div>
-              <span className="text-3xl font-bold text-slate-900">{stats.averageScore}%</span>
+              <span className="text-3xl font-bold text-slate-900">
+                {loading ? '-' : `${stats.averageScore}%`}
+              </span>
             </div>
             <h3 className="font-semibold text-slate-900">Average Score</h3>
             <p className="text-sm text-slate-600">Keep up the good work!</p>
@@ -191,7 +248,9 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                 <Clock className="w-6 h-6 text-purple-600" />
               </div>
-              <span className="text-3xl font-bold text-slate-900">{stats.testsToday}</span>
+              <span className="text-3xl font-bold text-slate-900">
+                {loading ? '-' : stats.testsToday}
+              </span>
             </div>
             <h3 className="font-semibold text-slate-900">Tests Today</h3>
             <p className="text-sm text-slate-600">Daily practice streak</p>
@@ -229,7 +288,6 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
                     </div>
                   </div>
                 </div>
-
                 <div className="flex items-center gap-4 mb-4 text-sm text-slate-600">
                   <div className="flex items-center gap-1">
                     <BookOpen className="w-4 h-4" />
@@ -240,7 +298,6 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
                     <span>{category.duration}</span>
                   </div>
                 </div>
-
                 <button
                   onClick={() => handleStartTest(category.id)}
                   className="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-3 rounded-lg transition-colors group-hover:scale-[1.02] transition-transform"
@@ -253,41 +310,22 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         </div>
 
         {/* Motivational Section */}
-
         <div className="mt-8 bg-white rounded-2xl p-6 border border-slate-200">
-
           <div className="flex items-center gap-6">
-
             <img
-
               src="https://images.unsplash.com/photo-1758518731027-78a22c8852ec?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhY2hpZXZlbWVudCUyMHN1Y2Nlc3MlMjBjZWxlYnJhdGlvbnxlbnwxfHx8fDE3NjkxMzcyMjB8MA&ixlib=rb-4.1.0&q=80&w=1080"
-
               alt="Success"
-
               className="w-32 h-32 rounded-xl object-cover"
-
             />
-
             <div>
-
               <h4 className="font-bold text-lg text-slate-900 mb-2">💪 Keep Practicing Daily!</h4>
-
               <p className="text-slate-600">
-
                 Consistency is key to success. Complete at least one practice set every day to see significant improvement in your placement preparation.
-
               </p>
-
             </div>
-
           </div>
-
         </div>
-
       </main>
-
     </div>
-
   );
-
 }

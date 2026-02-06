@@ -1,7 +1,8 @@
+import { useEffect, useState } from 'react';
+import { fetchProgress, type StudentProgress } from '../../backend/student/progressService';
 import { ArrowLeft, User as UserIcon, Mail, Trophy, Calendar, Clock, TrendingUp, AlertCircle, Target, Zap } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import type { User } from '../../App';
-import type { TestAttempt } from './StudentDashboard';
 
 interface ProfilePageProps {
   user: User;
@@ -9,87 +10,102 @@ interface ProfilePageProps {
   onLogout: () => void;
 }
 
+// Type for weak/strong area items
+interface AreaStat {
+  category: string;
+  percentage: number;
+  correct?: number;
+  total?: number;
+}
+
 export default function ProfilePage({ user, onBack, onLogout }: ProfilePageProps) {
-  // Mock test history
-  const testHistory: TestAttempt[] = [
-    {
-      id: '1',
-      date: '2026-01-23',
-      category: 'Aptitude',
-      score: 12,
-      totalQuestions: 15,
-      timeSpent: '18:30'
-    },
-    {
-      id: '2',
-      date: '2026-01-23',
-      category: 'Logical Reasoning',
-      score: 9,
-      totalQuestions: 12,
-      timeSpent: '13:45'
-    },
-    {
-      id: '3',
-      date: '2026-01-22',
-      category: 'Verbal Ability',
-      score: 8,
-      totalQuestions: 10,
-      timeSpent: '10:20'
-    },
-    {
-      id: '4',
-      date: '2026-01-22',
-      category: 'Coding',
-      score: 6,
-      totalQuestions: 8,
-      timeSpent: '28:15'
-    },
-    {
-      id: '5',
-      date: '2026-01-21',
-      category: 'Aptitude',
-      score: 11,
-      totalQuestions: 15,
-      timeSpent: '19:00'
-    }
-  ];
+  const [progress, setProgress] = useState<StudentProgress | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const totalAttempts = testHistory.length;
-  const totalCorrect = testHistory.reduce((acc, test) => acc + test.score, 0);
-  const totalQuestions = testHistory.reduce((acc, test) => acc + test.totalQuestions, 0);
-  const averageScore = Math.round((totalCorrect / totalQuestions) * 100);
+  useEffect(() => {
+    const loadProgress = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-  // Category-wise performance
-  const categoryStats = testHistory.reduce((acc, test) => {
-    if (!acc[test.category]) {
-      acc[test.category] = { correct: 0, total: 0 };
-    }
-    acc[test.category].correct += test.score;
-    acc[test.category].total += test.totalQuestions;
-    return acc;
-  }, {} as Record<string, { correct: number; total: number }>);
+        const data = await fetchProgress(user.email);
+        setProgress(data);
+      } catch (err: any) {
+        setError(err.message || 'Failed to load profile data');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // Prepare data for progress graph (sorted chronologically)
-  const progressData = testHistory
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    loadProgress();
+  }, [user.email]);
+
+  if (loading) {
+    return <div className="p-8 text-center">Loading profile...</div>;
+  }
+
+  if (error || !progress) {
+    return <div className="p-8 text-center text-red-600">{error || 'No data available'}</div>;
+  }
+
+  const { totalAttempts, averageScore, attempts } = progress;
+
+  if (attempts.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-slate-50 p-8">
+        <div className="max-w-6xl mx-auto">
+          <button onClick={onBack} className="flex items-center gap-2 text-slate-600 mb-6">
+            <ArrowLeft className="w-5 h-5" />
+            Back to Dashboard
+          </button>
+          <div className="bg-white rounded-2xl p-8 text-center">
+            <h2 className="text-2xl font-bold mb-4">No Test Attempts Yet</h2>
+            <p className="text-slate-600 mb-6">
+              Start practicing to see your progress and stats here!
+            </p>
+            <button
+              onClick={onBack}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold"
+            >
+              Go to Practice
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Real stats
+  const totalCorrect = attempts.reduce((acc, test) => acc + test.score, 0);
+  const totalQuestions = attempts.reduce((acc, test) => acc + test.total_questions, 0);
+  const avgScoreRounded = Math.round(averageScore);
+
+  // Category stats (no topic field available → fallback to single category)
+  const categoryStats = {
+    Overall: { correct: totalCorrect, total: totalQuestions }
+  };
+
+  // Progress graph data
+  const progressData = attempts
+    .sort((a, b) => new Date(a.attempted_at).getTime() - new Date(b.attempted_at).getTime())
     .map((test) => ({
-      date: new Date(test.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      score: Math.round((test.score / test.totalQuestions) * 100),
-      category: test.category
+      date: new Date(test.attempted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      score: Math.round((test.score / test.total_questions) * 100),
+      category: 'Overall'
     }));
 
-  // Identify weak areas (categories with <70% score)
-  const weakAreas = Object.entries(categoryStats)
+  // Weak/strong areas — typed properly
+  const weakAreas: AreaStat[] = Object.entries(categoryStats)
     .map(([category, stats]) => ({
       category,
-      percentage: Math.round((stats.correct / stats.total) * 100),
-      correct: stats.correct,
-      total: stats.total
+      percentage: Math.round((stats.correct / stats.total) * 100)
     }))
     .filter(area => area.percentage < 70)
     .sort((a, b) => a.percentage - b.percentage);
 
-  const strongAreas = Object.entries(categoryStats)
+  const strongAreas: AreaStat[] = Object.entries(categoryStats)
     .map(([category, stats]) => ({
       category,
       percentage: Math.round((stats.correct / stats.total) * 100)
@@ -110,7 +126,6 @@ export default function ProfilePage({ user, onBack, onLogout }: ProfilePageProps
               <ArrowLeft className="w-5 h-5" />
               <span className="font-medium">Back to Dashboard</span>
             </button>
-
             <button
               onClick={onLogout}
               className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-medium transition-colors"
@@ -164,7 +179,7 @@ export default function ProfilePage({ user, onBack, onLogout }: ProfilePageProps
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                 <Trophy className="w-6 h-6 text-green-600" />
               </div>
-              <span className="text-4xl font-bold text-slate-900">{averageScore}%</span>
+              <span className="text-4xl font-bold text-slate-900">{avgScoreRounded}%</span>
             </div>
             <h3 className="font-semibold text-slate-900 mb-1">Average Score</h3>
             <p className="text-sm text-slate-600">Overall performance</p>
@@ -185,39 +200,43 @@ export default function ProfilePage({ user, onBack, onLogout }: ProfilePageProps
         {/* Progress Graph */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-8">
           <h3 className="font-bold text-lg text-slate-900 mb-6">Progress Over Time</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={progressData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis 
-                dataKey="date" 
-                tick={{ fill: '#64748b', fontSize: 12 }}
-                tickLine={{ stroke: '#cbd5e1' }}
-              />
-              <YAxis 
-                label={{ value: 'Score (%)', angle: -90, position: 'insideLeft', fill: '#64748b' }}
-                tick={{ fill: '#64748b', fontSize: 12 }}
-                tickLine={{ stroke: '#cbd5e1' }}
-                domain={[0, 100]}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#ffffff', 
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  padding: '8px 12px'
-                }}
-                labelStyle={{ color: '#1e293b', fontWeight: '600' }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="score" 
-                stroke="#2563eb" 
-                strokeWidth={3}
-                dot={{ fill: '#2563eb', r: 5 }}
-                activeDot={{ r: 7, fill: '#1d4ed8' }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          {progressData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={progressData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fill: '#64748b', fontSize: 12 }}
+                  tickLine={{ stroke: '#cbd5e1' }}
+                />
+                <YAxis
+                  label={{ value: 'Score (%)', angle: -90, position: 'insideLeft', fill: '#64748b' }}
+                  tick={{ fill: '#64748b', fontSize: 12 }}
+                  tickLine={{ stroke: '#cbd5e1' }}
+                  domain={[0, 100]}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    padding: '8px 12px'
+                  }}
+                  labelStyle={{ color: '#1e293b', fontWeight: '600' }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  stroke="#2563eb"
+                  strokeWidth={3}
+                  dot={{ fill: '#2563eb', r: 5 }}
+                  activeDot={{ r: 7, fill: '#1d4ed8' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-center text-slate-600 py-8">No progress data yet</p>
+          )}
         </div>
 
         {/* Improvement Section */}
@@ -232,7 +251,7 @@ export default function ProfilePage({ user, onBack, onLogout }: ProfilePageProps
           {weakAreas.length > 0 ? (
             <div className="space-y-4">
               <p className="text-slate-600 mb-4">
-                Focus on these categories to boost your overall performance:
+                Focus on these areas to boost your overall performance:
               </p>
               {weakAreas.map((area) => (
                 <div key={area.category} className="border border-orange-200 bg-orange-50 rounded-lg p-4">
@@ -242,7 +261,7 @@ export default function ProfilePage({ user, onBack, onLogout }: ProfilePageProps
                       <div>
                         <h4 className="font-semibold text-slate-900">{area.category}</h4>
                         <p className="text-sm text-slate-600">
-                          Current Score: {area.correct}/{area.total} ({area.percentage}%)
+                          Current Score: {area.percentage}%
                         </p>
                       </div>
                     </div>
@@ -255,7 +274,7 @@ export default function ProfilePage({ user, onBack, onLogout }: ProfilePageProps
                       <strong>💡 Recommendation:</strong>
                     </p>
                     <ul className="text-sm text-slate-600 space-y-1 ml-5 list-disc">
-                      <li>Practice {area.category} daily to improve accuracy</li>
+                      <li>Practice daily to improve accuracy</li>
                       <li>Review incorrect answers and understand concepts</li>
                       <li>Target score: 70%+ for strong foundation</li>
                     </ul>
@@ -270,7 +289,7 @@ export default function ProfilePage({ user, onBack, onLogout }: ProfilePageProps
               </div>
               <h4 className="font-semibold text-slate-900 mb-2">Excellent Performance!</h4>
               <p className="text-slate-600">
-                You're scoring above 70% in all categories. Keep up the great work!
+                You're scoring well overall. Keep up the consistency!
               </p>
             </div>
           )}
@@ -283,7 +302,7 @@ export default function ProfilePage({ user, onBack, onLogout }: ProfilePageProps
               </h4>
               <div className="flex flex-wrap gap-2">
                 {strongAreas.map((area) => (
-                  <span 
+                  <span
                     key={area.category}
                     className="px-3 py-1.5 bg-green-100 text-green-700 rounded-full text-sm font-medium"
                   >
@@ -299,13 +318,13 @@ export default function ProfilePage({ user, onBack, onLogout }: ProfilePageProps
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <h3 className="font-bold text-lg text-slate-900 mb-6">Test History</h3>
           <div className="space-y-3">
-            {testHistory.map((test) => {
-              const percentage = Math.round((test.score / test.totalQuestions) * 100);
+            {attempts.map((test, index) => {
+              const percentage = Math.round((test.score / test.total_questions) * 100);
               const isPassed = percentage >= 60;
-              
+
               return (
                 <div
-                  key={test.id}
+                  key={index}
                   className="border border-slate-200 rounded-lg p-4 hover:border-slate-300 transition-colors"
                 >
                   <div className="flex items-center justify-between">
@@ -313,27 +332,27 @@ export default function ProfilePage({ user, onBack, onLogout }: ProfilePageProps
                       <div className={`w-16 h-16 rounded-lg flex items-center justify-center ${
                         isPassed ? 'bg-green-100' : 'bg-orange-100'
                       }`}>
-                        <span className="text-2xl font-bold ${isPassed ? 'text-green-700' : 'text-orange-700'}">
+                        <span className={`text-2xl font-bold ${isPassed ? 'text-green-700' : 'text-orange-700'}`}>
                           {percentage}%
                         </span>
                       </div>
                       <div>
-                        <h4 className="font-semibold text-slate-900">{test.category}</h4>
+                        <h4 className="font-semibold text-slate-900">Practice Attempt</h4>
                         <div className="flex items-center gap-4 text-sm text-slate-600 mt-1">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-4 h-4" />
-                            <span>{new Date(test.date).toLocaleDateString()}</span>
+                            <span>{new Date(test.attempted_at).toLocaleDateString()}</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
-                            <span>{test.timeSpent}</span>
+                            <span>~{Math.floor(test.total_questions / 2)} mins</span>
                           </div>
                         </div>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="text-2xl font-bold text-slate-900">
-                        {test.score}/{test.totalQuestions}
+                        {test.score}/{test.total_questions}
                       </p>
                       <p className="text-sm text-slate-600">Score</p>
                     </div>

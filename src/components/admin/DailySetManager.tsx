@@ -1,28 +1,71 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { listQuestions } from '../../backend/admin/questionService';
+import { createDailySet, addQuestionsToDailySet, setPublished, getDailySets } from '../../backend/admin/dailySetService';
+
 import { Calendar, Send, CheckCircle, BookOpen } from 'lucide-react';
 
 interface DailySet {
   id: string;
   date: string;
   category: string;
-  questionIds: string[];
+  questions: any[]; // from getDailySets flattened
   published: boolean;
 }
 
 interface Question {
   id: string;
-  category: string;
-  question: string;
+  topic: string;
+  question_text: string;
   difficulty: string;
 }
 
 export default function DailySetManager() {
   const [selectedCategory, setSelectedCategory] = useState('Aptitude');
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
-  const [publishedSets, setPublishedSets] = useState<DailySet[]>(mockPublishedSets);
+  const [availableQuestions, setAvailableQuestions] = useState<Question[]>([]);
+  const [publishedSets, setPublishedSets] = useState<DailySet[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const categories = ['Aptitude', 'Logical Reasoning', 'Verbal Ability', 'Coding'];
-  const availableQuestions = mockAvailableQuestions.filter((q) => q.category === selectedCategory);
+
+  // Fetch available questions on category change
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const { questions: data } = await listQuestions({
+          topic: selectedCategory,
+        });
+
+        setAvailableQuestions(data || []);
+        setSelectedQuestions([]); // reset selection on category change
+      } catch (err) {
+        setError('Failed to load questions');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQuestions();
+  }, [selectedCategory]);
+
+  // Fetch published sets on mount
+  useEffect(() => {
+    const fetchPublished = async () => {
+      try {
+        const { sets } = await getDailySets({ date: undefined, is_published: true });
+        setPublishedSets(sets || []);
+      } catch (err) {
+        console.error('Failed to load published sets', err);
+      }
+    };
+
+    fetchPublished();
+  }, []);
 
   const handleToggleQuestion = (questionId: string) => {
     if (selectedQuestions.includes(questionId)) {
@@ -32,23 +75,36 @@ export default function DailySetManager() {
     }
   };
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     if (selectedQuestions.length === 0) {
       alert('Please select at least one question to publish');
       return;
     }
 
-    const newSet: DailySet = {
-      id: Date.now().toString(),
-      date: new Date().toISOString(),
-      category: selectedCategory,
-      questionIds: selectedQuestions,
-      published: true
-    };
+    try {
+      // 1. Create new daily set
+      const newSet = await createDailySet({
+        date: new Date(),
+        created_by: 'ae32b198-11bc-474d-a04d-747737a9addf', // replace with real from auth
+      });
 
-    setPublishedSets([newSet, ...publishedSets]);
-    setSelectedQuestions([]);
-    alert(`Successfully published ${selectedQuestions.length} questions for ${selectedCategory}!`);
+      // 2. Add selected questions
+      await addQuestionsToDailySet(newSet.id, selectedQuestions);
+
+      // 3. Publish it
+      await setPublished(newSet.id, true);
+
+      // Refresh published sets
+      const { sets } = await getDailySets({ date: undefined, is_published: true });
+      setPublishedSets(sets || []);
+
+      setSelectedQuestions([]);
+      alert(`Successfully published ${selectedQuestions.length} questions for ${selectedCategory}!`);
+    } catch (err) {
+      setError('Failed to publish set');
+      console.error(err);
+      alert('Publish failed: ' + (err as Error).message);
+    }
   };
 
   return (
@@ -58,6 +114,9 @@ export default function DailySetManager() {
         <h1 className="text-3xl font-bold text-slate-900 mb-2">Daily Set Manager</h1>
         <p className="text-slate-600">Select and publish daily practice questions for students</p>
       </div>
+
+      {error && <p className="text-red-600 mb-4">{error}</p>}
+      {loading && <p className="text-slate-600 mb-4">Loading...</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Question Selection */}
@@ -69,10 +128,7 @@ export default function DailySetManager() {
               {categories.map((category) => (
                 <button
                   key={category}
-                  onClick={() => {
-                    setSelectedCategory(category);
-                    setSelectedQuestions([]);
-                  }}
+                  onClick={() => setSelectedCategory(category)}
                   className={`p-4 rounded-lg border-2 font-medium transition-all ${
                     selectedCategory === category
                       ? 'border-blue-600 bg-blue-50 text-blue-700'
@@ -115,18 +171,10 @@ export default function DailySetManager() {
                       className="mt-1 w-5 h-5 text-blue-600 rounded"
                     />
                     <div className="flex-1">
-                      <p className="text-slate-900 font-medium mb-2">{question.question}</p>
+                      <p className="text-slate-900 font-medium mb-2">{question.question_text}</p>
                       <div className="flex items-center gap-2">
-                        <span
-                          className={`text-xs px-2 py-1 rounded-full ${
-                            question.difficulty === 'Easy'
-                              ? 'bg-green-100 text-green-700'
-                              : question.difficulty === 'Medium'
-                              ? 'bg-orange-100 text-orange-700'
-                              : 'bg-red-100 text-red-700'
-                          }`}
-                        >
-                          {question.difficulty}
+                        <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                          {question.topic}
                         </span>
                         <span className="text-xs text-slate-600">ID: {question.id}</span>
                       </div>
@@ -170,7 +218,7 @@ export default function DailySetManager() {
 
             <button
               onClick={handlePublish}
-              disabled={selectedQuestions.length === 0}
+              disabled={selectedQuestions.length === 0 || loading}
               className="w-full bg-white hover:bg-blue-50 text-blue-700 font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send className="w-5 h-5" />
@@ -184,15 +232,15 @@ export default function DailySetManager() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-600">Sets Published Today</span>
-                <span className="font-bold text-slate-900">4</span>
+                <span className="font-bold text-slate-900">-</span> {/* Add real count later */}
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-600">This Week</span>
-                <span className="font-bold text-slate-900">24</span>
+                <span className="font-bold text-slate-900">-</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-600">Total Sets</span>
-                <span className="font-bold text-slate-900">156</span>
+                <span className="font-bold text-slate-900">{publishedSets.length}</span>
               </div>
             </div>
           </div>
@@ -220,7 +268,7 @@ export default function DailySetManager() {
                   <div>
                     <h4 className="font-semibold text-slate-900">{set.category}</h4>
                     <p className="text-sm text-slate-600">
-                      {new Date(set.date).toLocaleDateString()} • {set.questionIds.length} questions
+                      {new Date(set.date).toLocaleDateString()} • {set.questions?.length || 0} questions
                     </p>
                   </div>
                 </div>
@@ -235,91 +283,3 @@ export default function DailySetManager() {
     </div>
   );
 }
-
-// Mock data
-const mockAvailableQuestions: Question[] = [
-  {
-    id: 'Q001',
-    category: 'Aptitude',
-    question: 'If a train travels 360 km in 4 hours, what is its average speed?',
-    difficulty: 'Easy'
-  },
-  {
-    id: 'Q002',
-    category: 'Aptitude',
-    question: 'What is 15% of 240?',
-    difficulty: 'Easy'
-  },
-  {
-    id: 'Q003',
-    category: 'Aptitude',
-    question: 'If the ratio of boys to girls in a class is 3:2 and there are 45 students, how many are girls?',
-    difficulty: 'Medium'
-  },
-  {
-    id: 'Q004',
-    category: 'Aptitude',
-    question: 'A shopkeeper sells an item at 20% profit. If the cost price is ₹500, what is the selling price?',
-    difficulty: 'Medium'
-  },
-  {
-    id: 'Q005',
-    category: 'Logical Reasoning',
-    question: 'Complete the series: 2, 6, 12, 20, 30, ?',
-    difficulty: 'Medium'
-  },
-  {
-    id: 'Q006',
-    category: 'Logical Reasoning',
-    question: 'If COMPUTER is coded as DPNQVUFS, how is LAPTOP coded?',
-    difficulty: 'Hard'
-  },
-  {
-    id: 'Q007',
-    category: 'Verbal Ability',
-    question: 'Choose the synonym of "METICULOUS":',
-    difficulty: 'Easy'
-  },
-  {
-    id: 'Q008',
-    category: 'Verbal Ability',
-    question: 'Choose the antonym of "ABUNDANCE":',
-    difficulty: 'Easy'
-  },
-  {
-    id: 'Q009',
-    category: 'Coding',
-    question: 'What is the time complexity of binary search?',
-    difficulty: 'Medium'
-  },
-  {
-    id: 'Q010',
-    category: 'Coding',
-    question: 'Which data structure uses LIFO (Last In First Out)?',
-    difficulty: 'Easy'
-  }
-];
-
-const mockPublishedSets: DailySet[] = [
-  {
-    id: '1',
-    date: '2026-01-23T08:00:00Z',
-    category: 'Aptitude',
-    questionIds: ['Q001', 'Q002', 'Q003'],
-    published: true
-  },
-  {
-    id: '2',
-    date: '2026-01-23T09:00:00Z',
-    category: 'Coding',
-    questionIds: ['Q009', 'Q010'],
-    published: true
-  },
-  {
-    id: '3',
-    date: '2026-01-22T08:00:00Z',
-    category: 'Verbal Ability',
-    questionIds: ['Q007', 'Q008'],
-    published: true
-  }
-];

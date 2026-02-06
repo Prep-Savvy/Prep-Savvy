@@ -1,40 +1,95 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getAttemptsOverview, getAttemptsList } from '../../backend/admin/analyticsService';
 import { Search, TrendingUp, TrendingDown, Award, BarChart3 } from 'lucide-react';
 
 interface Student {
-  id: string;
-  name: string;
-  email: string;
-  totalAttempts: number;
-  averageScore: number;
-  lastActive: string;
-  topCategory: string;
+  identifier: string; // from backend topStudents
+  email?: string; // fallback if needed
+  name?: string;
+  attempts: number;
+  avgPercentage: number;
+  topCategory?: string; // derived or add later
 }
 
 export default function StudentAnalytics() {
-  const [students] = useState<Student[]>(mockStudents);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [overview, setOverview] = useState({
+    totalAttempts: 0,
+    averagePercentage: 0,
+    totalQuestionsAttempted: 0,
+    topStudents: [] as Student[]
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'attempts' | 'score'>('score');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch overview stats
+        const overviewData = await getAttemptsOverview();
+        setOverview(overviewData);
+
+        // Fetch full attempts list (for student details)
+        const { attempts } = await getAttemptsList({
+  daily_set_id: undefined,
+  student_email: undefined,
+  startDate: undefined,
+  endDate: undefined,
+  limit: 100,
+  page: 1
+}); // large limit for admin
+
+        // Group by student_email for unique students
+        const studentMap = new Map<string, Student>();
+        attempts.forEach((a: any) => {
+          const email = a.student_email || a.student_name || 'anonymous';
+          if (!studentMap.has(email)) {
+            studentMap.set(email, {
+              identifier: email,
+              email,
+              name: a.student_name || email.split('@')[0],
+              attempts: 0,
+              avgPercentage: 0,
+              topCategory: 'Unknown'
+            });
+          }
+          const s = studentMap.get(email)!;
+          s.attempts++;
+          s.avgPercentage = overviewData.averagePercentage; // fallback, refine later
+        });
+
+        setStudents(Array.from(studentMap.values()));
+      } catch (err: any) {
+        setError(err.message || 'Failed to load analytics');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const filteredStudents = students
-    .filter((s) => 
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.email.toLowerCase().includes(searchTerm.toLowerCase())
+    .filter((s) =>
+      (s.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       s.email?.toLowerCase().includes(searchTerm.toLowerCase()))
     )
     .sort((a, b) => {
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
-      if (sortBy === 'attempts') return b.totalAttempts - a.totalAttempts;
-      return b.averageScore - a.averageScore;
+      if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '');
+      if (sortBy === 'attempts') return b.attempts - a.attempts;
+      return b.avgPercentage - a.avgPercentage;
     });
 
   const totalStudents = students.length;
-  const avgScore = Math.round(students.reduce((acc, s) => acc + s.averageScore, 0) / totalStudents);
-  const activeToday = students.filter((s) => {
-    const lastActive = new Date(s.lastActive);
-    const today = new Date();
-    return lastActive.toDateString() === today.toDateString();
-  }).length;
-  const topPerformer = students.reduce((max, s) => s.averageScore > max.averageScore ? s : max);
+  const avgScore = Math.round(overview.averagePercentage);
+  const activeToday = 0; // add real logic later if you have lastActive field
+  const topPerformer = overview.topStudents[0] || { identifier: 'None', avgPercentage: 0 };
 
   return (
     <div className="p-8">
@@ -43,6 +98,9 @@ export default function StudentAnalytics() {
         <h1 className="text-3xl font-bold text-slate-900 mb-2">Student Analytics</h1>
         <p className="text-slate-600">Monitor student performance and engagement</p>
       </div>
+
+      {error && <p className="text-red-600 mb-4">{error}</p>}
+      {loading && <p className="text-slate-600 mb-4">Loading analytics...</p>}
 
       {/* Overview Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -56,7 +114,6 @@ export default function StudentAnalytics() {
           <h3 className="font-semibold text-slate-900 mb-1">Total Students</h3>
           <p className="text-sm text-slate-600">Registered users</p>
         </div>
-
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <div className="flex items-center justify-between mb-3">
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -67,7 +124,6 @@ export default function StudentAnalytics() {
           <h3 className="font-semibold text-slate-900 mb-1">Average Score</h3>
           <p className="text-sm text-slate-600">Platform-wide</p>
         </div>
-
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <div className="flex items-center justify-between mb-3">
             <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -78,14 +134,13 @@ export default function StudentAnalytics() {
           <h3 className="font-semibold text-slate-900 mb-1">Active Today</h3>
           <p className="text-sm text-slate-600">Current engagement</p>
         </div>
-
         <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-6 text-white">
           <div className="flex items-center gap-2 mb-2">
             <Award className="w-5 h-5" />
             <span className="text-sm font-medium">Top Performer</span>
           </div>
-          <p className="font-bold text-lg mb-1">{topPerformer.name}</p>
-          <p className="text-2xl font-bold">{topPerformer.averageScore}%</p>
+          <p className="font-bold text-lg mb-1">{topPerformer.identifier}</p>
+          <p className="text-2xl font-bold">{topPerformer.avgPercentage}%</p>
         </div>
       </div>
 
@@ -133,40 +188,40 @@ export default function StudentAnalytics() {
             </thead>
             <tbody className="divide-y divide-slate-200">
               {filteredStudents.map((student) => {
-                const performanceTrend = student.averageScore >= 75 ? 'up' : student.averageScore >= 60 ? 'stable' : 'down';
-                
+                const performanceTrend = student.avgPercentage >= 75 ? 'up' : student.avgPercentage >= 60 ? 'stable' : 'down';
+
                 return (
-                  <tr key={student.id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={student.identifier} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
-                          {student.name.charAt(0)}
+                          {(student.name || student.identifier).charAt(0)}
                         </div>
-                        <span className="font-semibold text-slate-900">{student.name}</span>
+                        <span className="font-semibold text-slate-900">{student.name || student.identifier}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{student.email}</td>
+                    <td className="px-6 py-4 text-sm text-slate-600">{student.email || student.identifier}</td>
                     <td className="px-6 py-4 text-center">
-                      <span className="font-semibold text-slate-900">{student.totalAttempts}</span>
+                      <span className="font-semibold text-slate-900">{student.attempts}</span>
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className={`inline-flex items-center justify-center w-16 h-8 rounded-full font-bold text-sm ${
-                        student.averageScore >= 75
+                        student.avgPercentage >= 75
                           ? 'bg-green-100 text-green-700'
-                          : student.averageScore >= 60
+                          : student.avgPercentage >= 60
                           ? 'bg-orange-100 text-orange-700'
                           : 'bg-red-100 text-red-700'
                       }`}>
-                        {student.averageScore}%
+                        {student.avgPercentage}%
                       </span>
                     </td>
                     <td className="px-6 py-4">
                       <span className="inline-flex px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-                        {student.topCategory}
+                        {student.topCategory || 'N/A'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600">
-                      {new Date(student.lastActive).toLocaleDateString()}
+                      N/A {/* No lastActive in current backend - add later */}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-center gap-1">
@@ -198,16 +253,16 @@ export default function StudentAnalytics() {
         </div>
       </div>
 
-      {/* Category Performance */}
+      {/* Category Performance Overview */}
       <div className="mt-8 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
         <h3 className="font-bold text-lg text-slate-900 mb-6">Category Performance Overview</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {['Aptitude', 'Logical Reasoning', 'Verbal Ability', 'Coding'].map((category) => {
             const categoryStudents = students.filter(s => s.topCategory === category);
             const categoryAvg = categoryStudents.length > 0
-              ? Math.round(categoryStudents.reduce((acc, s) => acc + s.averageScore, 0) / categoryStudents.length)
+              ? Math.round(categoryStudents.reduce((acc, s) => acc + s.avgPercentage, 0) / categoryStudents.length)
               : 0;
-            
+
             return (
               <div key={category} className="border border-slate-200 rounded-lg p-4">
                 <h4 className="font-semibold text-slate-900 mb-2">{category}</h4>
@@ -221,97 +276,3 @@ export default function StudentAnalytics() {
     </div>
   );
 }
-
-// Mock data
-const mockStudents: Student[] = [
-  {
-    id: '1',
-    name: 'Rahul Sharma',
-    email: 'rahul.sharma@example.com',
-    totalAttempts: 28,
-    averageScore: 85,
-    lastActive: '2026-01-23T10:30:00Z',
-    topCategory: 'Aptitude'
-  },
-  {
-    id: '2',
-    name: 'Priya Patel',
-    email: 'priya.patel@example.com',
-    totalAttempts: 32,
-    averageScore: 92,
-    lastActive: '2026-01-23T09:15:00Z',
-    topCategory: 'Coding'
-  },
-  {
-    id: '3',
-    name: 'Amit Kumar',
-    email: 'amit.kumar@example.com',
-    totalAttempts: 24,
-    averageScore: 78,
-    lastActive: '2026-01-22T14:20:00Z',
-    topCategory: 'Logical Reasoning'
-  },
-  {
-    id: '4',
-    name: 'Sneha Reddy',
-    email: 'sneha.reddy@example.com',
-    totalAttempts: 30,
-    averageScore: 88,
-    lastActive: '2026-01-23T11:00:00Z',
-    topCategory: 'Verbal Ability'
-  },
-  {
-    id: '5',
-    name: 'Vikram Singh',
-    email: 'vikram.singh@example.com',
-    totalAttempts: 22,
-    averageScore: 72,
-    lastActive: '2026-01-22T16:45:00Z',
-    topCategory: 'Aptitude'
-  },
-  {
-    id: '6',
-    name: 'Anjali Gupta',
-    email: 'anjali.gupta@example.com',
-    totalAttempts: 26,
-    averageScore: 81,
-    lastActive: '2026-01-23T08:30:00Z',
-    topCategory: 'Coding'
-  },
-  {
-    id: '7',
-    name: 'Rohan Mehta',
-    email: 'rohan.mehta@example.com',
-    totalAttempts: 20,
-    averageScore: 65,
-    lastActive: '2026-01-21T13:00:00Z',
-    topCategory: 'Logical Reasoning'
-  },
-  {
-    id: '8',
-    name: 'Kavya Nair',
-    email: 'kavya.nair@example.com',
-    totalAttempts: 35,
-    averageScore: 90,
-    lastActive: '2026-01-23T12:15:00Z',
-    topCategory: 'Verbal Ability'
-  },
-  {
-    id: '9',
-    name: 'Arjun Verma',
-    email: 'arjun.verma@example.com',
-    totalAttempts: 18,
-    averageScore: 58,
-    lastActive: '2026-01-20T10:00:00Z',
-    topCategory: 'Aptitude'
-  },
-  {
-    id: '10',
-    name: 'Divya Iyer',
-    email: 'divya.iyer@example.com',
-    totalAttempts: 29,
-    averageScore: 86,
-    lastActive: '2026-01-23T07:45:00Z',
-    topCategory: 'Coding'
-  }
-];

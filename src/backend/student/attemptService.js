@@ -18,7 +18,7 @@ export async function submitAttempt(
     .single();
 
   if (dailySetError || !dailySet) {
-    throw new Error("Invalid daily set ID");
+    throw new Error(`Invalid daily set ID: ${dailySetId}`);
   }
 
   /* ---------------- STEP 2: Fetch Questions + Correct Answers ---------------- */
@@ -48,11 +48,10 @@ export async function submitAttempt(
   /* ---------------- STEP 4: Validate & Prepare Answers ---------------- */
   const preparedAnswers = answers.map((ans) => {
     if (!correctAnswerMap[ans.questionId]) {
-      throw new Error("Invalid question ID: " + ans.questionId);
+      throw new Error(`Invalid question ID: ${ans.questionId}`);
     }
 
-    const isCorrect =
-      ans.selectedAnswer === correctAnswerMap[ans.questionId];
+    const isCorrect = ans.selectedAnswer === correctAnswerMap[ans.questionId];
 
     if (isCorrect) score++;
 
@@ -74,17 +73,24 @@ export async function submitAttempt(
       total_questions: totalQuestions,
       attempted_at: new Date().toISOString()
     })
-    .select("id")
-    .single();
+    .select('id')   // lowercase 'id' — this fixes the 400
+    .single();      // returns one row safely
 
   if (attemptError) {
-    throw new Error("Failed to save attempt");
+    console.error("Attempt insert error:", attemptError);
+    throw new Error(`Failed to save attempt: ${attemptError.message}`);
   }
+
+  if (!attempt || !attempt.id) {
+    throw new Error("No attempt ID returned from insert");
+  }
+
+  const attemptId = attempt.id;
 
   /* ---------------- STEP 6: Insert Attempt Answers ---------------- */
   const answerRows = preparedAnswers.map((a) => ({
     ...a,
-    attempt_id: attempt.id
+    attempt_id: attemptId
   }));
 
   const { error: answersError } = await supabase
@@ -92,7 +98,8 @@ export async function submitAttempt(
     .insert(answerRows);
 
   if (answersError) {
-    throw new Error("Failed to save answers");
+    console.error("Answers insert error:", answersError);
+    throw new Error(`Failed to save answers: ${answersError.message}`);
   }
 
   return {
