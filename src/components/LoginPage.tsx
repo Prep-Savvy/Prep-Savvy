@@ -300,7 +300,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                     : loginType === 'student'
                     ? showSignUp
                       ? 'Sign Up'
-                      : 'Start Learning'
+                      : 'Login'
                     : 'Access Admin Panel'}
                 </button>
 

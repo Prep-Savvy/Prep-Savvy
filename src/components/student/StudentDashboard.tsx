@@ -37,7 +37,7 @@ export interface TestAttempt {
 }
 
 export default function StudentDashboard({ user, onLogout }: StudentDashboardProps) {
-  const [currentView, setCurrentView] = useState<'home' | 'test' | 'profile' | 'results'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'test' | 'profile' | 'results' | 'instructions'>('home');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [lastTestResult, setLastTestResult] = useState<{
     score: number;
@@ -123,7 +123,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
 
   const handleStartTest = (categoryId: string) => {
     setSelectedCategory(categoryId);
-    setCurrentView('test');
+    setCurrentView('instructions'); // ← changed to instructions
   };
 
   const handleTestSubmit = (
@@ -141,13 +141,56 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     setSelectedCategory('');
   };
 
+  const handleCancelInstructions = () => {
+    setCurrentView('home');
+    setSelectedCategory('');
+  };
+
+  const handleContinueFromInstructions = () => {
+    setCurrentView('test');
+  };
+
+  if (currentView === 'instructions') {
+    const category = practiceCategories.find(c => c.id === selectedCategory);
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-slate-50 px-6">
+        <div className="bg-white w-full max-w-xl rounded-2xl shadow-xl border border-slate-200 p-8">
+          <h2 className="text-2xl font-bold text-slate-900 mb-4">
+            {category?.name} Test Instructions
+          </h2>
+          <ul className="list-disc list-inside text-slate-700 space-y-2 mb-6 text-sm">
+            <li>Total Questions: {category?.questionsCount}</li>
+            <li>Duration: {category?.duration}</li>
+            <li className="font-medium">No negative marking</li>
+            <li className="font-medium">Do not refresh or leave the test</li>
+            <li className="font-medium">Each question has only one correct answer</li>
+          </ul>
+          <div className="flex gap-4">
+            <button
+              onClick={handleCancelInstructions}
+              className="flex-1 py-3 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleContinueFromInstructions}
+              className="flex-1 py-3 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors"
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (currentView === 'test') {
     return (
       <TestInterface
         category={selectedCategory}
         onBack={handleBackToHome}
         onSubmit={handleTestSubmit}
-        user={user}  // ← this line added (fixes the error)
+        user={user}
       />
     );
   }
